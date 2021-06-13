@@ -17,11 +17,23 @@ knitr::render_markdown()
 
 ## NHL records API
 
-To access the NHL record API, the function 
+The `getRecords` function will contact the NHL records API and pull data from one of the six enpoint and output the data as a data frame.
+
+The first argument `input` is to specify one of the six enpoints: 
+
+*`"franchise"` will return id, firstSeasonId, lastSeasonId, and name of every team in the history of the NHL
+*`"teamtotal"` will return the total stats for every franchise
+*`"season"` will drill-down into season records and can do so for a specific franchise
+*`"goalie"` will return goalie records for all or a specified franchise
+*`"skater"` will return skater records for all or a specified franchise
+*`"history"` will return admin history and retired numbers
+
+The arguments `name` and `id` are used to specify which team or franchise's records you wish to output.
 
 ```{r}
-#Required package
+#Required packages
 library(httr)
+library(jsonlite)
 
 #Function to contact the NHL records API
 #returns well-formatted, parsed data
@@ -32,19 +44,49 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
   #All queries are prefixed by this base_url
   base_url <- "https://records.nhl.com/site/api"
   
-  #Selecting endpoints from given list
-  if (input == "franchise")
-    endpoint <- "franchise"
-  if (input == "teamtotal")
-    endpoint <- "franchise-team-totals"
-  if (input == "season")
-    endpoint <- "franchise-season-records"
-  if (input == "goalie")
-    endpoint <- "franchise-goalie-records"
-  if (input == "skater")
-    endpoint <- "franchise-skater-records"
+  #First two endpoints: do not have name/id specification
+  if (input == "franchise" | input == "teamtotaol"){
+    if (input == "franchise")
+      endpoint <- "franchise"
+    if (input == "teamtotal")
+      endpoint <- "franchise-team-totals"
+    full_url <- paste0(base_url, "/", endpoint)
+  }
   
-  #This endpoint is special because it uses mostRecentTeamId instead of franchiseId
+  #Third, fourth, and fifth endpoints: with name/id specification by franchiseId
+  if (input == "season" | input == "goalie" | input == "skater"){
+    if (input == "season")
+      endpoint <- "franchise-season-records"
+    if (input == "goalie")
+      endpoint <- "franchise-goalie-records"
+    if (input == "skater")
+      endpoint <- "franchise-skater-records"
+    
+    if (is.null(name) & is.null(id)){
+      full_url <- paste0(base_url,"/", endpoint)
+    }
+    else {
+      if (!is.null(id)) {
+        full_url <- paste0(base_url,"/", endpoint, "?cayenneExp=franchiseId=", id)
+      }
+      if (!is.null(name)) {
+        v <- c("Montreal Canadiens", "Montreal Wanderers", "St. Louis Eagles", "Hamilton Tigers",
+               "Toronto Maple Leafs", "Boston Bruins", "Montreal Maroons", "Brooklyn Americans",
+               "Philadelphia Quakers", "New York Rangers", "Chicago Blackhawks", "Detroit Red Wings",
+               "Cleveland Barons", "Los Angeles Kings", "Dallas Stars", "Philadelphia Flyers", 
+               "Pittsburgh Penguins", "St. Louis Blues", "Buffalo Sabres", "Vancouver Canucks", 
+               "Calgary Flames", "New York Islanders", "New Jersey Devils", "Washington Capitals",
+               "Edmonton Oilers", "Carolina Hurricanes", "Colorado Avalanche", "Arizona Coyotes",
+               "San Jose Sharks", "Ottawa Senators", "Tampa Bay Lightning", "Anaheim Ducks",
+               "Florida Panthers", "Nashville Predators", "Winnipeg Jets", "Columbus Blue Jackets",
+               "Minnesota Wild", "Vegas Golden Knights", "Seattle Kraken")
+        nameid <- match(name, v)
+        full_url <- paste0(base_url,"/", endpoint,"?cayenneExp=franchiseId=", nameid)
+      }
+    }
+  }
+  
+  #Sixth endpoint: has name/id specification by mostRecentTeamId instead of franchiseId
   if (input == "history"){
     endpoint <- "franchise-detail"
     if (is.null(name) & is.null(id)){
@@ -72,60 +114,33 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
       }
     }
   }
-    
-  #For all other endpoints the name and id agrument
-  if (is.null(name) & is.null(id)){
-    full_url <- paste0(base_url, "/", endpoint)
-  }
-  else {
-    if (!is.null(id)) {
-      full_url <- paste0(base_url, "/", endpoint, "?cayenneExp=franchiseId=", id)
-    }
-    if (!is.null(name)) {
-      v <- c("Montreal Canadiens", "Montreal Wanderers", "St. Louis Eagles", "Hamilton Tigers",
-             "Toronto Maple Leafs", "Boston Bruins", "Montreal Maroons", "Brooklyn Americans",
-             "Philadelphia Quakers", "New York Rangers", "Chicago Blackhawks", "Detroit Red Wings",
-             "Cleveland Barons", "Los Angeles Kings", "Dallas Stars", "Philadelphia Flyers", 
-             "Pittsburgh Penguins", "St. Louis Blues", "Buffalo Sabres", "Vancouver Canucks", 
-             "Calgary Flames", "New York Islanders", "New Jersey Devils", "Washington Capitals",
-             "Edmonton Oilers", "Carolina Hurricanes", "Colorado Avalanche", "Arizona Coyotes",
-             "San Jose Sharks", "Ottawa Senators", "Tampa Bay Lightning", "Anaheim Ducks",
-             "Florida Panthers", "Nashville Predators", "Winnipeg Jets", "Columbus Blue Jackets",
-             "Minnesota Wild", "Vegas Golden Knights", "Seattle Kraken")
-      nameid <- match(name, v)
-      full_url <- paste0(base_url,"/", endpoint, "?cayenneExp=franchiseId=", nameid)
-    }
-  }
   x <- GET(full_url)           #Retrieving data from URL
   y <- content(x, as = "text") #Converiting it to JSON text
   z <- fromJSON(y)             #Converting to list
   as.data.frame(z$data)        #Converting to data frame
 }
 
+## Examples:
 #Francise information
 franchise <- getRecords("franchise")
 
-#Total stats for every franchise
-teamtotal <- getRecords("teamtotal")
-
 #Season records for specific franchise
-season <- getRecords("season")
+season <- getRecords("season", id=1)
 
 #Goalie records for specific franchise
-goalie <- getRecords("goalie")
+goalie <- getRecords("goalie", name="Carolina Hurricanes")
 
-#Skater records for specific franchise
-skater <- getRecords("skater")
-
-#Admin history and retired numbers
-admin <- getRecords("history")
-
+#Admin history and retired numbers, Note: id is mostRecentTeamId
+admin <- getRecords("history", id=1)
 ```
-
 
 ## NHL stats API
 
-```{r}
+The `getStats` function
 
+```{r}
+getStats <- function(input, id = NULL){
+  
+}
 ```
 
