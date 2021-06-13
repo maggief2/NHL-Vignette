@@ -2,11 +2,130 @@
 title: "ST558 Project 1"
 author: "Maggie Feng"
 date: "June 8, 2021"
-output: html_document
+output: 
+  github_document:
+    toc: true
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+Note: required packages to run the code and create vignette
+
+```{r}
+knitr::render_markdown()
 ```
 
-#
+# National Hockey League (NHL) Vignette
+
+## NHL records API
+
+To access the NHL record API, the function 
+
+```{r}
+#Required package
+library(httr)
+
+#Function to contact the NHL records API
+#returns well-formatted, parsed data
+getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "skater", "history"), 
+                       name = NULL, id = NULL){
+  ##Note: if both team name and id arguments are filled, team name overrides id number
+  
+  #All queries are prefixed by this base_url
+  base_url <- "https://records.nhl.com/site/api"
+  
+  #Selecting endpoints from given list
+  if (input == "franchise")
+    endpoint <- "franchise"
+  if (input == "teamtotal")
+    endpoint <- "franchise-team-totals"
+  if (input == "season")
+    endpoint <- "franchise-season-records"
+  if (input == "goalie")
+    endpoint <- "franchise-goalie-records"
+  if (input == "skater")
+    endpoint <- "franchise-skater-records"
+  
+  #This endpoint is special because it uses mostRecentTeamId instead of franchiseId
+  if (input == "history"){
+    endpoint <- "franchise-detail"
+    if (is.null(name) & is.null(id)){
+      full_url <- paste0(base_url, "/", endpoint)
+    }
+    else {
+      if (!is.null(id)) {
+        full_url <- paste0(base_url, "/", endpoint, "?cayenneExp=mostRecentTeamId=", id)
+      }
+      if (!is.null(name)) {
+        u <- c("New Jersey Devils", "New York Islanders", "New York Rangers", "Philadelphia Flyers",
+               "Pittsburgh Penguins", "Boston Bruins", "Buffalo Sabres", "Montreal Canadiens",
+               "Ottawa Senators", "Toronto Maple Leafs", "Carolina Hurricanes", "Florida Panthers",
+               "Tampa Bay Lightning", "Washington Capitals", "Chicago Blackhawks", 
+               "Detroit Red Wings", "Nashville Predators", "St. Louis Blues", "Calgary Flames", 
+               "Colorado Avalanche", "Edmonton Oilers", 
+               "Vancouver Canucks", "Anaheim Ducks", "Dallas Stars",
+               "Los Angeles Kings", "San Jose Sharks", "Columbus Blue Jackets", "Minnesota Wild",
+               "Hamilton Tigers", "Philadelphia Quakers", "Montreal Wanderers", "Montreal Maroons",
+               "St. Louis Eagles", "Cleveland Barons", "Brooklyn Americans", "Winnipeg Jets",
+               "Arizona Coyotes", "Vegas Golden Knights", "Seattle Kraken")
+        nameid <- match(name, u)
+        unum <- c(1:10, 12:30, seq(37,45,by=2), 49, 51:55)
+        full_url <- paste0(base_url,"/", endpoint, "?cayenneExp=mostRecentTeamId=", unum[nameid])
+      }
+    }
+  }
+    
+  #For all other endpoints the name and id agrument
+  if (is.null(name) & is.null(id)){
+    full_url <- paste0(base_url, "/", endpoint)
+  }
+  else {
+    if (!is.null(id)) {
+      full_url <- paste0(base_url, "/", endpoint, "?cayenneExp=franchiseId=", id)
+    }
+    if (!is.null(name)) {
+      v <- c("Montreal Canadiens", "Montreal Wanderers", "St. Louis Eagles", "Hamilton Tigers",
+             "Toronto Maple Leafs", "Boston Bruins", "Montreal Maroons", "Brooklyn Americans",
+             "Philadelphia Quakers", "New York Rangers", "Chicago Blackhawks", "Detroit Red Wings",
+             "Cleveland Barons", "Los Angeles Kings", "Dallas Stars", "Philadelphia Flyers", 
+             "Pittsburgh Penguins", "St. Louis Blues", "Buffalo Sabres", "Vancouver Canucks", 
+             "Calgary Flames", "New York Islanders", "New Jersey Devils", "Washington Capitals",
+             "Edmonton Oilers", "Carolina Hurricanes", "Colorado Avalanche", "Arizona Coyotes",
+             "San Jose Sharks", "Ottawa Senators", "Tampa Bay Lightning", "Anaheim Ducks",
+             "Florida Panthers", "Nashville Predators", "Winnipeg Jets", "Columbus Blue Jackets",
+             "Minnesota Wild", "Vegas Golden Knights", "Seattle Kraken")
+      nameid <- match(name, v)
+      full_url <- paste0(base_url,"/", endpoint, "?cayenneExp=franchiseId=", nameid)
+    }
+  }
+  x <- GET(full_url)           #Retrieving data from URL
+  y <- content(x, as = "text") #Converiting it to JSON text
+  z <- fromJSON(y)             #Converting to list
+  as.data.frame(z$data)        #Converting to data frame
+}
+
+#Francise information
+franchise <- getRecords("franchise")
+
+#Total stats for every franchise
+teamtotal <- getRecords("teamtotal")
+
+#Season records for specific franchise
+season <- getRecords("season")
+
+#Goalie records for specific franchise
+goalie <- getRecords("goalie")
+
+#Skater records for specific franchise
+skater <- getRecords("skater")
+
+#Admin history and retired numbers
+admin <- getRecords("history")
+
+```
+
+
+## NHL stats API
+
+```{r}
+
+```
+
