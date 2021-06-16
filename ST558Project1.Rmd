@@ -8,18 +8,13 @@ output:
 ---
 
 ```{r setup, include = FALSE}
-#README file
-#knitr::render(input="ST558Project1.Rmd", output = "readme.md")
-#knit(input="ST558Project1.Rmd", output = "readme.md")
-
-#Note: required packages to run the code and create vignette
+#To create vignette
 #devtools::build_vignettes()
 ```
 
-Required packages to run this vignette
+Required packages to run this vignette:
 
 ```{r, message = FALSE}
-#Required packages
 library(httr)
 library(jsonlite)
 library(tidyverse)
@@ -155,6 +150,8 @@ admin <- getRecords("history", id=1)
 
 The `getStats` function will contact the [NHL stats API](https://gitlab.com/dword4/nhlapi/-/blob/master/stats-api.md) for the modifier and will output a data frame for a specified team or all teams. The arguments `recentId` and `name` can be specified if we want to look at a specific team. Otherwise, we can leave the arguments empty to output all teams stats.
 
+Note: The Seattle Kraken is a new team that joined in 2021, so there is no current data on them. 
+
 ```{r}
 getStats <- function(name = NULL, recentId = NULL){
   base_url <- "https://statsapi.web.nhl.com/api/v1/teams"
@@ -175,6 +172,10 @@ getStats <- function(name = NULL, recentId = NULL){
     }
     else {
       if (!is.null(recentId)) {
+        if (recentId == 55){
+          stop("Seattle Kraken is a new team in the NHL (as of 2021), 
+               so there is no data on them")
+        }
         full_url <- paste0(base_url, "/", recentId, "?expand=team.stats")
       }
       if (!is.null(name)) {
@@ -189,7 +190,11 @@ getStats <- function(name = NULL, recentId = NULL){
                "Montreal Maroons","St. Louis Eagles", "Cleveland Barons", "Brooklyn Americans",
                "Winnipeg Jets", "Arizona Coyotes", "Vegas Golden Knights", "Seattle Kraken")
         nameid <- match(name, u)
-        unum <- c(1:10, 12:30, seq(37,45,by=2), 49, 51:55)
+        unum <- c(1:10, 12:26, 28:30, seq(37,45,by=2), 49, 51:55)
+        if (unum[nameid] == 55){
+          stop("Seattle Kraken is a new team in the NHL (as of 2021), 
+               so there is no data on them")
+        }
         full_url <- paste0(base_url, "/", unum[nameid], "?expand=team.stats")
       }
       x <- GET(full_url)
@@ -202,35 +207,65 @@ getStats <- function(name = NULL, recentId = NULL){
 }
 ```
 
-Below are examples of calling the `getStats` function. The first calls all teams and the second calls the first team.
+Below are examples of calling the `getStats` function. The first example calls all teams and the second calls the first team. The third calls for the team named Seattle Kraken, which is a new team in the NHL (as of 2021), so there is currently no data on them in the API.
 
-```{r}
+```{r, error = TRUE}
 ## Examples
 #All stats for all teams
 all <- getStats()
 
 #For a specific team
 team1 <- getStats(recentId = 1)
-team2 <- getStats(name = "Dallas Stars")
+
+#For Seattle Kraken (recentId = 55)
+getStats(name = "Seattle Kraken")
 ```
 
 ## API wrapper
 
-The `getEndpoint` function is a wrapper function that allows the user to access any of the six API endpoints, including modifiers, teamIDs, etc. The function has arguments: 
-* `input` to specify which of the six endpoints is to be used
-* `name` because of the differences in `id` and `mostRecentId` only the name should be specified as the teamID
-* `modifier` is set to `FALSE` but can be set to `TRUE` to obtain the NHL stats API modifier
+The `getEndpoint` function is a wrapper function that allows the user to access any of the six API endpoints of `getRecords` or the stats from `getStats` including the modification for selecting the team using `name` or `id`. The `input` argument takes the six choices from `getRecords` and a new choice `"stats"`, which will output `getStats` for all or a specified team.
 
 ```{r}
-getEndpoint <- function(input = NULL, name, modifier = FALSE){
-  getRecords(input, name = NULL, id = NULL)
-  if (modifier = TRUE){
-    getStats(name = NULL)
+getEndpoint <- function(input, name = NULL, id = NULL){
+  if (input == "stats"){
+    getStats(name, recentId = id)
+  }
+  else {
+    getRecords(input, name, id)
   }
 }
 ```
 
 # Exploratory Data Analysis
+
+Say we are interested in seeing how skaters and goalies from our home team, the Carolina Hurricanes, compare to the 2020 Stanley Cup winners (and the team that just beat for the semifinal spot), the Tampa Bay Lightning. 
+
+```{r, message = FALSE}
+#Each team;s skaters:
+#Tampa Bay Lightning
+skateLightning <- getEndpoint("skater", name = "Tampa Bay Lightning")
+#Carolina Hurricanes
+skateHurricane <- getEndpoint("skater", name = "Carolina Hurricanes")
+
+#Combining the datasets, choosing only active players, and variables of interest
+skateTBLvsCH <- rbind(skateLightning, skateHurricane) %>% filter(activePlayer == TRUE) %>%
+  select(franchiseName, playerId, positionCode, gamesPlayed, assists, goals, points, penaltyMinutes)
+
+#Each team's goalies:
+#Tampa Bay Lightning
+goalLightning <- getEndpoint("goalie", name = "Tampa Bay Lightning")
+#Carolina Hurricanes
+goalHurricane <- getEndpoint("goalie", name = "Carolina Hurricanes")
+
+#Combining the datasets, choosing only active players, and variables of interest
+#New variables: 
+goalTBLvsCH <- rbind(goalLightning, goalHurricane) %>% filter(activePlayer == TRUE) %>%
+  select(franchiseName, playerId, gamesPlayed, losses, wins, ties, shutouts)
+```
+
+## Contingency tables
+
+## Numerical Summaries
 
 ## Bar plot
 
