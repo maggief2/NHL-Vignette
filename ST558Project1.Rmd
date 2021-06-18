@@ -18,13 +18,15 @@ Required packages to run this vignette:
 library(httr)
 library(jsonlite)
 library(tidyverse)
+library(ggplot2)
+library(knitr)
 ```
 
 # Functions to read in the data
 
 ## NHL records API
 
-The `getRecords` function will contact the [NHL records API](https://gitlab.com/dword4/nhlapi/-/blob/master/records-api.md), pull data from one of the six enpoints, and output the data as a data frame.
+The `getRecords` function will contact the [NHL records API](https://gitlab.com/dword4/nhlapi/-/blob/master/records-api.md), pull data from one of the six endpoints, and output a data frame.
 
 The first argument `input` is to specify one of the six endpoints: 
 
@@ -156,16 +158,25 @@ Note: The Seattle Kraken is a new team that joined in 2021, so there is no curre
 getStats <- function(name = NULL, recentId = NULL){
   base_url <- "https://statsapi.web.nhl.com/api/v1/teams"
   
+  #function to get the data into a useable form
+  getData <- function(url){
+    x <- GET(full_url)
+    y <- content(x, as = "text")
+    fromJSON(y)
+  }
+  
   if (is.null(name) & is.null(recentId)){
       full_url <- paste0(base_url, "?expand=team.stats")
-      x <- GET(full_url)
-      y <- content(x, as = "text")
-      z <- fromJSON(y)
+      z <- getData(full_url)
       df <- NULL
       for (i in 1:31){
+        #selecting stats
         a <- z$teams[i,]$teamStats[[1]]$splits[[1]]$stat[1,]
+        #id and names for the teams
         b <- z$teams[i,][,c("id","name")]
+        #combining the two
         c <- cbind(b,a)
+        #adding the new row to the data frame
         df <- rbind(df,c)
       }
       df
@@ -197,11 +208,12 @@ getStats <- function(name = NULL, recentId = NULL){
         }
         full_url <- paste0(base_url, "/", unum[nameid], "?expand=team.stats")
       }
-      x <- GET(full_url)
-      y <- content(x, as = "text")
-      z <- fromJSON(y)
+      z <- getData(full_url)
+      #selecting stats
       a <- z$teams[1,]$teamStats[[1]]$splits[[1]]$stat[1,]
+      #id and names for the teams
       b <- z$teams[1,][,c("id","name")]
+      #combining the two
       cbind(b,a)
     }
 }
@@ -238,39 +250,161 @@ getEndpoint <- function(input, name = NULL, id = NULL){
 
 # Exploratory Data Analysis
 
-Say we are interested in seeing how skaters and goalies from our home team, the Carolina Hurricanes, compare to the 2020 Stanley Cup winners (and the team that just beat for the semifinal spot), the Tampa Bay Lightning. 
+The data is from over a year ago, but I decided to focus on the skaters and goalies that were considered active. For some of the graphs I chose to compare the Carolina Hurricanes and Tampa Bay Lightning. I selected these two teams because the Carolina Hurricanes are the home team of North Carolina and the Tampa Bay Lightning were the 2020 Stanley Cup winners and the team that recently beat the Hurricanes for the semifinal spot for the 2021 Stanley Cup. 
+
+New variables of interest:
+* For skaters:
+    + `ppg` or points per game which is to determine their average points in the number of games they have played
+* For goalies:
+    + `winPercent` which follows the formula given in [this](http://hockeygoalies.org/stats/glossary.html) website
+    + `positionCode` to match the skaters when combining the datasets
 
 ```{r, message = FALSE}
-#Each team;s skaters:
+##Each team's skaters:
 #Tampa Bay Lightning
 skateLightning <- getEndpoint("skater", name = "Tampa Bay Lightning")
 #Carolina Hurricanes
 skateHurricane <- getEndpoint("skater", name = "Carolina Hurricanes")
 
 #Combining the datasets, choosing only active players, and variables of interest
-skateTBLvsCH <- rbind(skateLightning, skateHurricane) %>% filter(activePlayer == TRUE) %>%
-  select(franchiseName, playerId, positionCode, gamesPlayed, assists, goals, points, penaltyMinutes)
+#New variable: ppg
+skateTBLvsCH <- rbind(skateLightning, skateHurricane) %>% 
+  filter(activePlayer == TRUE) %>%
+  select(franchiseName, playerId, positionCode, gamesPlayed, assists, goals, points, 
+         penaltyMinutes) %>% 
+  mutate(ppg = points/gamesPlayed)
 
-#Each team's goalies:
+#Converting the variables to factors and labeling levels
+skateTBLvsCH$positionCode <- factor(skateTBLvsCH$positionCode, 
+                                     c("C", "D", "L", "R"), 
+                                     c("Center", "Defence", "Left Wing", "Right Wing"))
+
+##Each team's goalies:
 #Tampa Bay Lightning
 goalLightning <- getEndpoint("goalie", name = "Tampa Bay Lightning")
 #Carolina Hurricanes
 goalHurricane <- getEndpoint("goalie", name = "Carolina Hurricanes")
 
 #Combining the datasets, choosing only active players, and variables of interest
-#New variables: 
-goalTBLvsCH <- rbind(goalLightning, goalHurricane) %>% filter(activePlayer == TRUE) %>%
-  select(franchiseName, playerId, gamesPlayed, losses, wins, ties, shutouts)
+#New variable: winPercent and positionCode
+goalTBLvsCH <- rbind(goalLightning, goalHurricane) %>% 
+  filter(activePlayer == TRUE) %>%
+  select(franchiseName, playerId, gamesPlayed, losses, wins, ties, overtimeLosses, shutouts) %>%
+  replace_na(list(ties = 0)) %>% 
+  mutate(winPercent = ((2*wins)+ ties + overtimeLosses)/(2*(wins + losses + ties + overtimeLosses)), 
+         positionCode = "Goalie")
+
+#All players on the two teams - essentially like a roster
+skateroster <- skateTBLvsCH %>% select(franchiseName, playerId, positionCode, gamesPlayed)
+goalroster <- goalTBLvsCH %>% select(franchiseName, playerId, positionCode, gamesPlayed)
+rosterTBLvsCH <- rbind(skateroster, goalroster)
+
+#All active goalies in the NHL with variables of interest and new variable winPercent
+allGoalie <- getEndpoint(input = "goalie") %>% 
+  filter(activePlayer == TRUE) %>%
+  select(franchiseName, playerId, gamesPlayed, losses, wins, ties, overtimeLosses, shutouts) %>%
+  mutate(winPercent=((2*wins)+ ties + overtimeLosses)/(2*(wins + losses + ties + overtimeLosses))) %>%
+  replace_na(list(ties = 0, overTimeLosses = 0, winPercent = 0))
 ```
 
 ## Contingency tables
 
-## Numerical Summaries
+The following table and barplot display the active players by their positions in their respective teams. We can see that the Carolina Hurricanes had more players on their team since they have more centers, defence, and left wing and the same number of goalies and right wing as the Tampa Bay Lightning.
+
+```{r}
+#Table for franchiseName by positionCode
+kable(table(rosterTBLvsCH$franchiseName, rosterTBLvsCH$positionCode),
+             caption = "Players in each team by position information")
+```
 
 ## Bar plot
 
-## Histogram
+The bar plot below visually displays the data from the table above.
+
+```{r}
+ggplot(rosterTBLvsCH, aes(positionCode, fill = franchiseName)) + 
+  geom_bar(position = "dodge") +
+  labs(title = "Players of each team by position", x = "Position")
+```
+
+## Numerical Summaries
+
+Suppose we want to investigate of the data for skaters, by team or for all skaters. The `getSummary` function will takes in the team and position for active skaters that we are interested in and outputs a the five number summary for the assists, goals, points, and penalty Minutes. 
+
+```{r}
+getSkaterSummary <- function(position, name = NULL){
+  skatePosition <- getEndpoint("skater", name)
+  new <- skatePosition %>% filter(activePlayer == TRUE & positionCode == position) %>%
+    select(assists, goals, points, penaltyMinutes)
+  if (position == "C")
+     type = "Center"
+  if (position == "D")
+     type = "Defence"
+  if (position == "L")
+     type = "Left Wing"
+  if (position == "R")
+     type = "Right Wing"
+  if (is.null(name)){
+    main <- paste0("Summary of ", type)
+  }
+  else {
+    main <- paste0("Summary of ", type, " for ", name)
+  }
+  kable(apply(new, 2, summary), caption = main)
+}
+```
+
+When we look at the data for players on the Carolina Hurricanes we can see that the minimum assists, goals, points, and penalty minutes is usually zero across all positions, except left wing players that have four minutes as the minimum penalty minutes. The left wing players also have a larger value for the first quartile for all variables. The right wing players have small values for the first quartile and median, but as we saw from the bar graph, we know there are fewer left wing players than the other three positions (center, denfense, and left wing).
+
+```{r, message = FALSE}
+getSkaterSummary(position = "C", name = "Carolina Hurricanes")
+getSkaterSummary(position = "D", name = "Carolina Hurricanes")
+getSkaterSummary(position = "L", name = "Carolina Hurricanes")
+getSkaterSummary(position = "R", name = "Carolina Hurricanes")
+```
 
 ## Box plot
 
+If we were interested in seeing the points per game of the skaters. The players with positions center, defense, and left wing have similar plots between the two teams. Some slight differences is the center on the Tampa Bay Lightnings with over 0.9 points per game. On the Carolina Hurricanes, the defense player with over 0.6 points per game is an outlier, but for Tampa Bay, the player with over 0.6 points per game is still within the whisker of the boxplot. The most noticable difference between the two teams are in the right wing boxplot. First the inter quartile range for the Tampa Bay Lightning is much smaller than the Carolina Hurricanes and they also have an outlier that is over 0.9 points per game. 
+
+```{r}
+ggplot(skateTBLvsCH, aes(positionCode, ppg)) +
+  geom_boxplot() +
+  geom_jitter(aes(color = positionCode)) + 
+  facet_wrap(~franchiseName) +
+  labs(title = "Boxplot for points per game", x = "player positon", y = "points per game")
+```
+
+## Histogram
+
+### Points per game
+Using a historgram we can roughly see what the density of the player's points per game for each team. We can see that the majority of the data from 0 to 0.9 points per game. We can also see Tampa Bay Lighting has players who score at least one point per game they play, while the Carolina Hurricanes all stay below one point per game.
+
+```{r}
+#Separated histograms for each team
+ggplot(skateTBLvsCH, aes(ppg)) +
+  geom_histogram(aes(y = ..density..), bins = 15) + 
+  geom_density(color = "red") +
+  labs(title = "Histogram for points per game by team", x = "Points per game")
+```
+
+### Win Percent
+
+From the histogram of win percent for all goalies in the NHL, we can see many stay are close to zero, which logically makes sense. For example, the Carolina Hurricanes and Tampa Bay Lightning had five goalies. Assuming they have two to three main goalies then many of the goalies would not have many opportunities to play and therefore have a zero win percentage. If we ignore the zero percent win rate, then the data from around 0.3 to 0.6 contain the majority of win percentages and few goalies are above/below that range. 
+
+```{r}
+#A histogram for all goalies in the NHL
+ggplot(allGoalie, aes(winPercent)) +
+  geom_histogram(aes(y = ..density..), bins = 15) +
+  labs(title = "Histogram for Win Percent of All Goalies in NHL", x = "Win Percent")
+```
+
 ## Scatter plot
+
+Looking at the scatterplots for the number of games played versus the points per game, we can see that there is generally a positive trend for both teams. This makes sense since there is more opportunity to obtain points by playing in more games.
+
+```{r}
+ggplot(skateTBLvsCH, aes(gamesPlayed, points, col = franchiseName)) + 
+  geom_point() + 
+  labs(title = "Games Played vs Points", x = "Games Played", y = "Points")
+```
