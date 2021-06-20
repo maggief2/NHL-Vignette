@@ -505,7 +505,7 @@ ggplot(rosterTBLvsCH, aes(positionCode, fill = franchiseName)) +
   labs(title = "Players of each team by position", x = "Position")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-49-1.png)<!-- -->
+![](ST558Project1_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
 
 ## Numerical Summaries
 
@@ -632,7 +632,7 @@ ggplot(skateTBLvsCH, aes(positionCode, ppg)) +
   labs(title = "Boxplot for points per game", x = "player positon", y = "points per game")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-52-1.png)<!-- -->
+![](ST558Project1_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
 
 ## Histogram
 
@@ -653,7 +653,7 @@ ggplot(skateTBLvsCH, aes(ppg)) +
   labs(title = "Histogram for points per game by team", x = "Points per game")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-53-1.png)<!-- -->
+![](ST558Project1_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 ### Win Percent
 
@@ -673,7 +673,7 @@ ggplot(allGoalie, aes(winPercent)) +
   labs(title = "Histogram for Win Percent of All Goalies in NHL", x = "Win Percent")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-54-1.png)<!-- -->
+![](ST558Project1_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
 
 ## Scatter plot
 
@@ -688,4 +688,4 @@ ggplot(skateTBLvsCH, aes(gamesPlayed, points, col = franchiseName)) +
   labs(title = "Games Played vs Points", x = "Games Played", y = "Points")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-55-1.png)<!-- -->
+![](ST558Project1_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->

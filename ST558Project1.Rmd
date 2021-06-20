@@ -7,11 +7,6 @@ output:
     toc: true
 ---
 
-```{r setup, include = FALSE}
-#To create vignette
-#devtools::build_vignettes()
-```
-
 Required packages to run this vignette:
 
 ```{r, message = FALSE}
@@ -37,11 +32,10 @@ The first argument `input` is to specify one of the six endpoints:
 * `"skater"` will return skater records for all or a specified franchise
 * `"history"` will return admin history and retired numbers
 
-The arguments `name` and `id` are used to specify which team or franchise's records you wish to output. Adding `name` or `id` for the first two endpoints, `"franchise"` and `"teamtotal"`, will have the same result of not adding the arguments at all. 
+The arguments `name` and `id` are used to specify which team's records you wish to output. Adding `name` or `id` for the first two endpoints, `"franchise"` and `"teamtotal"`, will have the same result of not adding the arguments at all. For the third, fourth, and fifth endpoint `id` specification is based on the `franchiseId`, while the sixth endpoint `id` specification is based on the `mostRecentTeamId`. Due to possible confusion surrounding the `id` input, if the `name` input is used alongside it, `name` will override `id` when the function is run.
 
 ```{r}
 #Function to contact the NHL records API
-#returns well-formatted, parsed data
 getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "skater", "history"), 
                        name = NULL, id = NULL){
   ##Note: if both team name and id arguments are filled, team name overrides id number
@@ -75,6 +69,7 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
         full_url <- paste0(base_url,"/", endpoint, "?cayenneExp=franchiseId=", id)
       }
       if (!is.null(name)) {
+        #Names based on franchiseId
         v <- c("Montreal Canadiens", "Montreal Wanderers", "St. Louis Eagles", "Hamilton Tigers",
                "Toronto Maple Leafs", "Boston Bruins", "Montreal Maroons", "Brooklyn Americans",
                "Philadelphia Quakers", "New York Rangers", "Chicago Blackhawks", "Detroit Red Wings",
@@ -85,6 +80,7 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
                "San Jose Sharks", "Ottawa Senators", "Tampa Bay Lightning", "Anaheim Ducks",
                "Florida Panthers", "Nashville Predators", "Winnipeg Jets", "Columbus Blue Jackets",
                "Minnesota Wild", "Vegas Golden Knights", "Seattle Kraken")
+        #Gives the number corresponding the position of the team name in vector v
         nameid <- match(name, v)
         full_url <- paste0(base_url,"/", endpoint,"?cayenneExp=franchiseId=", nameid)
       }
@@ -102,6 +98,7 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
         full_url <- paste0(base_url, "/", endpoint, "?cayenneExp=mostRecentTeamId=", id)
       }
       if (!is.null(name)) {
+        #Names based on order of mostRecentTeamId
         u <- c("New Jersey Devils", "New York Islanders", "New York Rangers", "Philadelphia Flyers",
                "Pittsburgh Penguins", "Boston Bruins", "Buffalo Sabres", "Montreal Canadiens",
                "Ottawa Senators", "Toronto Maple Leafs", "Carolina Hurricanes", "Florida Panthers",
@@ -112,7 +109,9 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
                "Minnesota Wild", "Hamilton Tigers", "Philadelphia Quakers", "Montreal Wanderers",
                "Montreal Maroons","St. Louis Eagles", "Cleveland Barons", "Brooklyn Americans",
                "Winnipeg Jets", "Arizona Coyotes", "Vegas Golden Knights", "Seattle Kraken")
+        #Gives the number corresponding the position of the team name in vector v
         nameid <- match(name, u)
+        #Numbers corresponding to mostRecentTeamId for teams in vector u
         unum <- c(1:10, 12:30, seq(37,45,by=2), 49, 51:55)
         full_url <- paste0(base_url,"/", endpoint, "?cayenneExp=mostRecentTeamId=", unum[nameid])
       }
@@ -121,41 +120,48 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
   x <- GET(full_url)           #Retrieving data from URL
   y <- content(x, as = "text") #Converiting it to JSON text
   z <- fromJSON(y)             #Converting to list
+  #Returns well-formatted, parsed data
   as.data.frame(z$data)        #Converting to data frame
 }
 ```
 
-Below are some examples of how to use the function. The first outputs all of the franchise information. The second shows how adding an `id` (or `name`) argument will not affect the `"teamtotal"` (and `"franchise"`) inputs. The third shows all season records, but can also have a specification of `id` or `name`. The fourth shows goalie information for the team with 1 as the `franchiseId`. The fifth shows the skater inforamtion for the team with `name` Carolina Hurricanes. The sixth shows the admin history and retired numbers for the team with 1 as the `mostRecentTeamId`.
+Below are some examples of how to use the function. The first outputs all of the franchise information. The second shows how adding an `id` (or `name`) argument will not affect the `"teamtotal"` (and `"franchise"`) endpoint(s). The third shows season records for the team with 1 as the`id`, which, in this case is the `franchiseId`. The fourth shows season records for all teams since the `name` and `id` were not specified. The fifth shows goalie information for the team with the `name` Carolina Hurricanes. The sixth shows how the `name` input overrides the `id` input, giving us the skater inforamtion for the team with `name` Carolina Hurricanes. The seventh shows the admin history and retired numbers for the team with 1 as the `id`, which is the `mostRecentTeamId`. Do note that I reduced the number of columns in the data frames in the `head` function so the output would be nicer.
 
 ```{r, message = FALSE}
 ## Examples:
 #Franchise information
 franchise <- getRecords("franchise")
+head(franchise[,1:6])
 
 #Total stats for every franchise
 total <- getRecords("teamtotal", id=1)
+head(total[,1:6])
 
 #Season records for specific franchise or for all 
-season <- getRecords("season")
+season <- getRecords("season", id=1)
+head(season[,c(1:4, 14)])
+allseason <- getRecords("season")
+head(allseason[,c(1:4,14)])
 
 #Goalie records for specific franchise
-goalie <- getRecords("goalie", id=1)
+goalie <- getRecords("goalie", name = "Carolina Hurricanes")
+head(goalie[,1:6])
 
 #Skater records for for specific franchise
-skater <- getRecords("skater", name = "Carolina Hurricanes")
+skater <- getRecords("skater", name = "Carolina Hurricanes", id=1)
+head(skater[,1:6])
 
 #Admin history and retired numbers, Note: id is mostRecentTeamId
 admin <- getRecords("history", id=1)
+head(admin[,c(1,10,2,3)])
 ```
 
 ## NHL stats API
 
-The `getStats` function will contact the [NHL stats API](https://gitlab.com/dword4/nhlapi/-/blob/master/stats-api.md) for the modifier and will output a data frame for a specified team or all teams. The arguments `recentId` and `name` can be specified if we want to look at a specific team. Otherwise, we can leave the arguments empty to output all teams stats.
-
-Note: The Seattle Kraken is a new team that joined in 2021, so there is no current data on them. 
+The `getStats` function will contact the [NHL stats API](https://gitlab.com/dword4/nhlapi/-/blob/master/stats-api.md) for the modifier and will output a data frame for a specified team or all teams. The arguments `id` and `name` can be specified if we want to look at a specific team. Otherwise, we can leave the arguments empty to output all teams stats. The function will output an error if the `id` or `name` corresponds to the team Seattle Kraken, because there is no stats data for this team. With a bit of research, the lack of stats may be because the Seattle Kraken is a new team that joined in 2021, so there is no data on them currently. 
 
 ```{r}
-getStats <- function(name = NULL, recentId = NULL){
+getStats <- function(name = NULL, id = NULL){
   base_url <- "https://statsapi.web.nhl.com/api/v1/teams"
   
   #function to get the data into a useable form
@@ -165,7 +171,7 @@ getStats <- function(name = NULL, recentId = NULL){
     fromJSON(y)
   }
   
-  if (is.null(name) & is.null(recentId)){
+  if (is.null(name) & is.null(id)){
       full_url <- paste0(base_url, "?expand=team.stats")
       z <- getData(full_url)
       df <- NULL
@@ -182,26 +188,28 @@ getStats <- function(name = NULL, recentId = NULL){
       df
     }
     else {
-      if (!is.null(recentId)) {
-        if (recentId == 55){
+      if (!is.null(id)) {
+        if (id == 55){
           stop("Seattle Kraken is a new team in the NHL (as of 2021), 
                so there is no data on them")
         }
-        full_url <- paste0(base_url, "/", recentId, "?expand=team.stats")
+        full_url <- paste0(base_url, "/", id, "?expand=team.stats")
       }
       if (!is.null(name)) {
+        #Based on id which corresponds to `mostRecentTeamId` in previous function
+        #but has less teams than previous function
         u <- c("New Jersey Devils", "New York Islanders", "New York Rangers", "Philadelphia Flyers",
                "Pittsburgh Penguins", "Boston Bruins", "Buffalo Sabres", "Montreal Canadiens",
                "Ottawa Senators", "Toronto Maple Leafs", "Carolina Hurricanes", "Florida Panthers",
                "Tampa Bay Lightning", "Washington Capitals", "Chicago Blackhawks", 
                "Detroit Red Wings", "Nashville Predators", "St. Louis Blues", "Calgary Flames", 
                "Colorado Avalanche", "Edmonton Oilers", "Vancouver Canucks", "Anaheim Ducks", 
-               "Dallas Stars","Los Angeles Kings", "San Jose Sharks", "Columbus Blue Jackets", 
-               "Minnesota Wild", "Hamilton Tigers", "Philadelphia Quakers", "Montreal Wanderers",
-               "Montreal Maroons","St. Louis Eagles", "Cleveland Barons", "Brooklyn Americans",
-               "Winnipeg Jets", "Arizona Coyotes", "Vegas Golden Knights", "Seattle Kraken")
+               "Dallas Stars", "Los Angeles Kings", "San Jose Sharks", "Columbus Blue Jackets", 
+               "Minnesota Wild", "Winnipeg Jets", "Arizona Coyotes", "Vegas Golden Knights",
+               "Seattle Kraken")
         nameid <- match(name, u)
-        unum <- c(1:10, 12:26, 28:30, seq(37,45,by=2), 49, 51:55)
+        #Id number corresponding to team names above
+        unum <- c(1:10, 12:26, 28:30, 52:55)
         if (unum[nameid] == 55){
           stop("Seattle Kraken is a new team in the NHL (as of 2021), 
                so there is no data on them")
@@ -219,15 +227,19 @@ getStats <- function(name = NULL, recentId = NULL){
 }
 ```
 
-Below are examples of calling the `getStats` function. The first example calls all teams and the second calls the first team. The third calls for the team named Seattle Kraken, which is a new team in the NHL (as of 2021), so there is currently no data on them in the API.
+Below are examples of calling the `getStats` function. The first example calls all teams. The second calls the team with 1 as the `id`. The third calls for teh team named Carolina Hurricanes. The fourth calls for the team named Seattle Kraken, which will output an error since they are a new team in the NHL (as of 2021), so there is currently no data on them in the API.
 
 ```{r, error = TRUE}
 ## Examples
 #All stats for all teams
 all <- getStats()
+head(all[,1:9])
 
 #For a specific team
-team1 <- getStats(recentId = 1)
+team1 <- getStats(id = 1)
+head(team1[,1:9])
+team2 <- getStats(name = "Carolina Hurricanes")
+head(team2[,1:9])
 
 #For Seattle Kraken (recentId = 55)
 getStats(name = "Seattle Kraken")
@@ -240,7 +252,7 @@ The `getEndpoint` function is a wrapper function that allows the user to access 
 ```{r}
 getEndpoint <- function(input, name = NULL, id = NULL){
   if (input == "stats"){
-    getStats(name, recentId = id)
+    getStats(name, id)
   }
   else {
     getRecords(input, name, id)
@@ -250,14 +262,16 @@ getEndpoint <- function(input, name = NULL, id = NULL){
 
 # Exploratory Data Analysis
 
-The data is from over a year ago, but I decided to focus on the skaters and goalies that were considered active. For some of the graphs I chose to compare the Carolina Hurricanes and Tampa Bay Lightning. I selected these two teams because the Carolina Hurricanes are the home team of North Carolina and the Tampa Bay Lightning were the 2020 Stanley Cup winners and the team that recently beat the Hurricanes for the semifinal spot for the 2021 Stanley Cup. 
+The data appears to be from over a year ago, but I decided to focus on the skaters and goalies that were considered active. For some of the graphs I chose to compare the Carolina Hurricanes and Tampa Bay Lightning. I selected these two teams because the Carolina Hurricanes are the home team of North Carolina and the Tampa Bay Lightning were the 2020 Stanley Cup winners and the team that recently beat the Hurricanes for the semifinal spot for the 2021 Stanley Cup. For other graphs I focused on the Carolina Hurricanes or all players in a specfied position.
+
+To get the data we are interested in, we can use the `getEndpoint` function. I began by pulling the data from the teams Tampa Bay Lightning and Carolina Hurricanes, combined the two datasets, filtered and selected by our variables of interest, and created new variables. This was done for both the skaters and goalies of each team. The data on the skaters and goalies were combined to examine the composition of the team rosters. Finally, a dataset containing all active goalies in the league was created to see how well the goalies perform.
 
 New variables of interest:
 * For skaters:
     + `ppg` or points per game which is to determine their average points in the number of games they have played
 * For goalies:
     + `winPercent` which follows the formula given in [this](http://hockeygoalies.org/stats/glossary.html) website
-    + `positionCode` to match the skaters when combining the datasets
+    + `positionCode` to match the column that the skaters have
 
 ```{r, message = FALSE}
 ##Each team's skaters:
@@ -277,7 +291,7 @@ skateTBLvsCH <- rbind(skateLightning, skateHurricane) %>%
 #Converting the variables to factors and labeling levels
 skateTBLvsCH$positionCode <- factor(skateTBLvsCH$positionCode, 
                                      c("C", "D", "L", "R"), 
-                                     c("Center", "Defence", "Left Wing", "Right Wing"))
+                                     c("Center", "Defense", "Left Wing", "Right Wing"))
 
 ##Each team's goalies:
 #Tampa Bay Lightning
@@ -309,7 +323,7 @@ allGoalie <- getEndpoint(input = "goalie") %>%
 
 ## Contingency tables
 
-The following table and barplot display the active players by their positions in their respective teams. We can see that the Carolina Hurricanes had more players on their team since they have more centers, defence, and left wing and the same number of goalies and right wing as the Tampa Bay Lightning.
+The following table and barplot display the active players by their positions in their respective teams. We can see that the Carolina Hurricanes had more players on their team since they have more centers, defense, and left wing and the same number of goalies and right wing as the Tampa Bay Lightning.
 
 ```{r}
 #Table for franchiseName by positionCode
@@ -329,7 +343,7 @@ ggplot(rosterTBLvsCH, aes(positionCode, fill = franchiseName)) +
 
 ## Numerical Summaries
 
-Suppose we want to investigate of the data for skaters, by team or for all skaters. The `getSummary` function will takes in the team and position for active skaters that we are interested in and outputs a the five number summary for the assists, goals, points, and penalty Minutes. 
+Suppose we want to get a preliminary investigation on the data for skaters, by team or for all skaters with a specific position. The `getSkaterSummary` function will take in the team and position for active skaters that we are interested in and outputs a the five number summary for the assists, goals, points, and penalty Minutes. 
 
 ```{r}
 getSkaterSummary <- function(position, name = NULL){
@@ -339,7 +353,7 @@ getSkaterSummary <- function(position, name = NULL){
   if (position == "C")
      type = "Center"
   if (position == "D")
-     type = "Defence"
+     type = "Defense"
   if (position == "L")
      type = "Left Wing"
   if (position == "R")
@@ -354,7 +368,7 @@ getSkaterSummary <- function(position, name = NULL){
 }
 ```
 
-When we look at the data for players on the Carolina Hurricanes we can see that the minimum assists, goals, points, and penalty minutes is usually zero across all positions, except left wing players that have four minutes as the minimum penalty minutes. The left wing players also have a larger value for the first quartile for all variables. The right wing players have small values for the first quartile and median, but as we saw from the bar graph, we know there are fewer left wing players than the other three positions (center, denfense, and left wing).
+When we look at the data for players on the Carolina Hurricanes we can see that the minimum assists, goals, points, and penalty minutes is usually zero across all positions, except left wing players that have four minutes as the minimum penalty minutes. The left wing players also have a larger value for the first quartile for all variables. The right wing players have small values for the first quartile and median, but as we saw from the bar graph, we know there are fewer left wing players than the other three positions (center, denfense, and left wing). An interesting observation, is the defense (defencemen) for the Carolina Hurricanes has more assists and points than the right wing, on average. The centers also have the largest maximum values for all four variables.
 
 ```{r, message = FALSE}
 getSkaterSummary(position = "C", name = "Carolina Hurricanes")
@@ -378,13 +392,15 @@ ggplot(skateTBLvsCH, aes(positionCode, ppg)) +
 ## Histogram
 
 ### Points per game
-Using a historgram we can roughly see what the density of the player's points per game for each team. We can see that the majority of the data from 0 to 0.9 points per game. We can also see Tampa Bay Lighting has players who score at least one point per game they play, while the Carolina Hurricanes all stay below one point per game.
+
+Using a historgram we can roughly see what the density of the player's points per game for each team. The two teams have similar density lines, with a slightly right skewed shape. We can also see Tampa Bay Lighting has players who score at least one point per game they play, while the Carolina Hurricanes all stay below one point per game.
 
 ```{r}
 #Separated histograms for each team
 ggplot(skateTBLvsCH, aes(ppg)) +
   geom_histogram(aes(y = ..density..), bins = 15) + 
   geom_density(color = "red") +
+  facet_wrap(~franchiseName) +
   labs(title = "Histogram for points per game by team", x = "Points per game")
 ```
 
