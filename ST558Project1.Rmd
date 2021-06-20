@@ -12,6 +12,8 @@ Required packages to run this vignette:
 ```{r, message = FALSE}
 library(httr)
 library(jsonlite)
+library(xml2)
+library(rvest)
 library(tidyverse)
 library(ggplot2)
 library(knitr)
@@ -30,18 +32,34 @@ The first argument `input` is to specify one of the six endpoints:
 * `"season"` will drill-down into season records and can do so for a specific franchise
 * `"goalie"` will return goalie records for all or a specified franchise
 * `"skater"` will return skater records for all or a specified franchise
-* `"history"` will return admin history and retired numbers
+* `"history"` will return admin history (captains, coaches, or general managers) or retired numbers
 
 The arguments `name` and `id` are used to specify which team's records you wish to output. Adding `name` or `id` for the first two endpoints, `"franchise"` and `"teamtotal"`, will have the same result of not adding the arguments at all. For the third, fourth, and fifth endpoint `id` specification is based on the `franchiseId`, while the sixth endpoint `id` specification is based on the `mostRecentTeamId`. Due to possible confusion surrounding the `id` input, if the `name` input is used alongside it, `name` will override `id` when the function is run.
+
+The final input `detail` is an argument to specify if you want to pull admin history (captains, coaches, or managers) or retired numbers. Adding this argument will not affect the first five endpoints, but is required when the `input` is `"history"`.
+
+The `detail` argument can be:
+
+* `"captain"` to give the captain history
+* `"coach"` to give the coach history
+* `"manager"` to give the general manager history
+* `"player"` to give the retired numbers 
 
 ```{r}
 #Function to contact the NHL records API
 getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "skater", "history"), 
-                       name = NULL, id = NULL){
+                       name = NULL, id = NULL, detail = NULL){
   ##Note: if both team name and id arguments are filled, team name overrides id number
   
   #All queries are prefixed by this base_url
   base_url <- "https://records.nhl.com/site/api"
+  
+  #Function to convert the url
+  convert <- function(url){
+    x <- GET(url)                #Retrieving data from URL
+    y <- content(x, as = "text") #Converiting it to JSON text
+    fromJSON(y)                  #Converting to list
+  }
   
   #First two endpoints: do not have name/id specification
   if (input == "franchise" | input == "teamtotal"){
@@ -50,6 +68,9 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
     if (input == "teamtotal")
       endpoint <- "franchise-team-totals"
     full_url <- paste0(base_url, "/", endpoint)
+    z <- convert(full_url)
+    #Returns well-formatted, parsed data
+    out <-as.data.frame(z$data)  #Converting to data frame
   }
   
   #Third, fourth, and fifth endpoints: with name/id specification by franchiseId
@@ -85,13 +106,16 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
         full_url <- paste0(base_url,"/", endpoint,"?cayenneExp=franchiseId=", nameid)
       }
     }
+    z <- convert(full_url)
+    #Returns well-formatted, parsed data
+    out <-as.data.frame(z$data)  #Converting to data frame
   }
   
   #Sixth endpoint: has name/id specification by mostRecentTeamId instead of franchiseId
   if (input == "history"){
     endpoint <- "franchise-detail"
     if (is.null(name) & is.null(id)){
-      full_url <- paste0(base_url, "/", endpoint)
+      stop("Need to specify team")
     }
     else {
       if (!is.null(id)) {
@@ -116,16 +140,37 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
         full_url <- paste0(base_url,"/", endpoint, "?cayenneExp=mostRecentTeamId=", unum[nameid])
       }
     }
+    z <- convert(full_url)
+    #Converting to data frame
+    a <- as.data.frame(z$data)
+    
+    #Output error if detail is not given for "history" input
+    if (is.null(detail)){
+      stop("Need to specify detail: captain, coach, manager, or player")
+    }
+    
+    #Selecting which detail you want
+    if (detail == "captain")
+      b <- a$captainHistory
+    if (detail == "coach")
+      b <- a$coachingHistory
+    if (detail == "manager")
+      b <- a$generalManagerHistory
+    if (detail == "player")
+      b <- a$retiredNumbersSummary
+    #Converting to strings
+    info <- read_html(b) %>%
+      html_nodes(css = "li") %>%
+      html_text() 
+    out <- as.data.frame(info)
   }
-  x <- GET(full_url)           #Retrieving data from URL
-  y <- content(x, as = "text") #Converiting it to JSON text
-  z <- fromJSON(y)             #Converting to list
-  #Returns well-formatted, parsed data
-  as.data.frame(z$data)        #Converting to data frame
+  out
 }
 ```
 
-Below are some examples of how to use the function. The first outputs all of the franchise information. The second shows how adding an `id` (or `name`) argument will not affect the `"teamtotal"` (and `"franchise"`) endpoint(s). The third shows season records for the team with 1 as the`id`, which, in this case is the `franchiseId`. The fourth shows season records for all teams since the `name` and `id` were not specified. The fifth shows goalie information for the team with the `name` Carolina Hurricanes. The sixth shows how the `name` input overrides the `id` input, giving us the skater inforamtion for the team with `name` Carolina Hurricanes. The seventh shows the admin history and retired numbers for the team with 1 as the `id`, which is the `mostRecentTeamId`. Do note that I reduced the number of columns in the data frames in the `head` function so the output would be nicer.
+Below are some examples of how to use the function. The first outputs all of the franchise information. The second shows how adding an `id` (or `name`) argument will not affect the `"teamtotal"` (and `"franchise"`) endpoint(s). The third shows season records for the team with 1 as the`id`, which, in this case is the `franchiseId`. The fourth shows season records for all teams since the `name` and `id` were not specified. The fifth shows goalie information for the team with the `name` Carolina Hurricanes. The sixth shows how the `name` input overrides the `id` input, giving us the skater inforamtion for the team with `name` Carolina Hurricanes. The seventh shows the retired numbers for the team with 1 as the `id`, which is the `mostRecentTeamId`. It pulls the information on the retired numbers due to the `detail` argument. 
+
+Note: I reduced the number of columns in the data frames in the `head` function so the output would be nicer.
 
 ```{r, message = FALSE}
 ## Examples:
@@ -152,8 +197,8 @@ skater <- getRecords("skater", name = "Carolina Hurricanes", id=1)
 head(skater[,1:6])
 
 #Admin history and retired numbers, Note: id is mostRecentTeamId
-admin <- getRecords("history", id=1)
-head(admin[,c(1,10,2,3)])
+admin <- getRecords("history", id=1, detail = "player")
+head(admin)
 ```
 
 ## NHL stats API
@@ -229,6 +274,8 @@ getStats <- function(name = NULL, id = NULL){
 
 Below are examples of calling the `getStats` function. The first example calls all teams. The second calls the team with 1 as the `id`. The third calls for teh team named Carolina Hurricanes. The fourth calls for the team named Seattle Kraken, which will output an error since they are a new team in the NHL (as of 2021), so there is currently no data on them in the API.
 
+Note: I reduced the number of columns in the data frames in the `head` function so the output would be nicer.
+
 ```{r, error = TRUE}
 ## Examples
 #All stats for all teams
@@ -250,12 +297,12 @@ getStats(name = "Seattle Kraken")
 The `getEndpoint` function is a wrapper function that allows the user to access any of the six API endpoints of `getRecords` or the stats from `getStats` including the modification for selecting the team using `name` or `id`. The `input` argument takes the six choices from `getRecords` and a new choice `"stats"`, which will output `getStats` for all or a specified team.
 
 ```{r}
-getEndpoint <- function(input, name = NULL, id = NULL){
+getEndpoint <- function(input, name = NULL, id = NULL, ...){
   if (input == "stats"){
     getStats(name, id)
   }
   else {
-    getRecords(input, name, id)
+    getRecords(input, name, id, ...)
   }
 }
 ```
@@ -267,6 +314,7 @@ The data appears to be from over a year ago, but I decided to focus on the skate
 To get the data we are interested in, we can use the `getEndpoint` function. I began by pulling the data from the teams Tampa Bay Lightning and Carolina Hurricanes, combined the two datasets, filtered and selected by our variables of interest, and created new variables. This was done for both the skaters and goalies of each team. The data on the skaters and goalies were combined to examine the composition of the team rosters. Finally, a dataset containing all active goalies in the league was created to see how well the goalies perform.
 
 New variables of interest:
+
 * For skaters:
     + `ppg` or points per game which is to determine their average points in the number of games they have played
 * For goalies:

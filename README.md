@@ -22,6 +22,8 @@ Required packages to run this vignette:
 ``` r
 library(httr)
 library(jsonlite)
+library(xml2)
+library(rvest)
 library(tidyverse)
 library(ggplot2)
 library(knitr)
@@ -46,7 +48,8 @@ The first argument `input` is to specify one of the six endpoints:
     franchise
 -   `"skater"` will return skater records for all or a specified
     franchise
--   `"history"` will return admin history and retired numbers
+-   `"history"` will return admin history (captains, coaches, or general
+    managers) or retired numbers
 
 The arguments `name` and `id` are used to specify which team’s records
 you wish to output. Adding `name` or `id` for the first two endpoints,
@@ -57,14 +60,33 @@ specification is based on the `franchiseId`, while the sixth endpoint
 confusion surrounding the `id` input, if the `name` input is used
 alongside it, `name` will override `id` when the function is run.
 
+The final input `detail` is an argument to specify if you want to pull
+admin history (captains, coaches, or managers) or retired numbers.
+Adding this argument will not affect the first five endpoints, but is
+required when the `input` is `"history"`.
+
+The `detail` argument can be:
+
+-   `"captain"` to give the captain history
+-   `"coach"` to give the coach history
+-   `"manager"` to give the general manager history
+-   `"player"` to give the retired numbers
+
 ``` r
 #Function to contact the NHL records API
 getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "skater", "history"), 
-                       name = NULL, id = NULL){
+                       name = NULL, id = NULL, detail = NULL){
   ##Note: if both team name and id arguments are filled, team name overrides id number
   
   #All queries are prefixed by this base_url
   base_url <- "https://records.nhl.com/site/api"
+  
+  #Function to convert the url
+  convert <- function(url){
+    x <- GET(url)                #Retrieving data from URL
+    y <- content(x, as = "text") #Converiting it to JSON text
+    fromJSON(y)                  #Converting to list
+  }
   
   #First two endpoints: do not have name/id specification
   if (input == "franchise" | input == "teamtotal"){
@@ -73,6 +95,9 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
     if (input == "teamtotal")
       endpoint <- "franchise-team-totals"
     full_url <- paste0(base_url, "/", endpoint)
+    z <- convert(full_url)
+    #Returns well-formatted, parsed data
+    out <-as.data.frame(z$data)  #Converting to data frame
   }
   
   #Third, fourth, and fifth endpoints: with name/id specification by franchiseId
@@ -108,13 +133,16 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
         full_url <- paste0(base_url,"/", endpoint,"?cayenneExp=franchiseId=", nameid)
       }
     }
+    z <- convert(full_url)
+    #Returns well-formatted, parsed data
+    out <-as.data.frame(z$data)  #Converting to data frame
   }
   
   #Sixth endpoint: has name/id specification by mostRecentTeamId instead of franchiseId
   if (input == "history"){
     endpoint <- "franchise-detail"
     if (is.null(name) & is.null(id)){
-      full_url <- paste0(base_url, "/", endpoint)
+      stop("Need to specify team")
     }
     else {
       if (!is.null(id)) {
@@ -139,12 +167,31 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
         full_url <- paste0(base_url,"/", endpoint, "?cayenneExp=mostRecentTeamId=", unum[nameid])
       }
     }
+    z <- convert(full_url)
+    #Converting to data frame
+    a <- as.data.frame(z$data)
+    
+    #Output error if detail is not given for "history" input
+    if (is.null(detail)){
+      stop("Need to specify detail: captain, coach, manager, or player")
+    }
+    
+    #Selecting which detail you want
+    if (detail == "captain")
+      b <- a$captainHistory
+    if (detail == "coach")
+      b <- a$coachingHistory
+    if (detail == "manager")
+      b <- a$generalManagerHistory
+    if (detail == "player")
+      b <- a$retiredNumbersSummary
+    #Converting to strings
+    info <- read_html(b) %>%
+      html_nodes(css = "li") %>%
+      html_text() 
+    out <- as.data.frame(info)
   }
-  x <- GET(full_url)           #Retrieving data from URL
-  y <- content(x, as = "text") #Converiting it to JSON text
-  z <- fromJSON(y)             #Converting to list
-  #Returns well-formatted, parsed data
-  as.data.frame(z$data)        #Converting to data frame
+  out
 }
 ```
 
@@ -157,10 +204,13 @@ shows season records for all teams since the `name` and `id` were not
 specified. The fifth shows goalie information for the team with the
 `name` Carolina Hurricanes. The sixth shows how the `name` input
 overrides the `id` input, giving us the skater inforamtion for the team
-with `name` Carolina Hurricanes. The seventh shows the admin history and
-retired numbers for the team with 1 as the `id`, which is the
-`mostRecentTeamId`. Do note that I reduced the number of columns in the
-data frames in the `head` function so the output would be nicer.
+with `name` Carolina Hurricanes. The seventh shows the retired numbers
+for the team with 1 as the `id`, which is the `mostRecentTeamId`. It
+pulls the information on the retired numbers due to the `detail`
+argument.
+
+Note: I reduced the number of columns in the data frames in the `head`
+function so the output would be nicer.
 
 ``` r
 ## Examples:
@@ -243,14 +293,16 @@ head(skater[,1:6])
 
 ``` r
 #Admin history and retired numbers, Note: id is mostRecentTeamId
-admin <- getRecords("history", id=1)
-head(admin[,c(1,10,2,3)])
+admin <- getRecords("history", id=1, detail = "player")
+head(admin)
 ```
 
-    ##   id mostRecentTeamId active
-    ## 1 23                1   TRUE
-    ##                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       captainHistory
-    ## 1 <ul class="striped-list">\r\n\t<li>(No Captain) and Nico Hischier: 2020-21</li>\r\n\t<li>Andy Greene and (No Captain): 2019-20</li>\r\n\t<li>Andy Greene: 2015-16 &ndash;&nbsp;2018-19</li>\r\n\t<li>Bryce Salvador: 2012-13 &ndash;&nbsp;2014-15</li>\r\n\t<li>Zach Parise: 2011-12</li>\r\n\t<li>Jamie Langenbrunner: 2008-09 &ndash;&nbsp;2010-11</li>\r\n\t<li>Patrik Elias and Jamie Langenbrunner: 2007-08</li>\r\n\t<li>Patrik Elias: 2006-07</li>\r\n\t<li>(No Captain): 2005-06</li>\r\n\t<li>Scott Stevens and Scott Niedermayer: 2003-04</li>\r\n\t<li>Scott Stevens: 1992-93 &ndash;&nbsp;2002-03</li>\r\n\t<li>Bruce Driver: 1991-92</li>\r\n\t<li>Kirk Muller: 1987-88 &ndash;&nbsp;1990-91</li>\r\n\t<li>Mel Bridgman: 1984-85 &ndash;&nbsp;1986-87</li>\r\n\t<li>Don Lever and Mel Bridgman: 1983-84</li>\r\n\t<li>Don Lever: 1982-83</li>\r\n\t<li>Lanny McDonald and Rob Ramage: 1981-82</li>\r\n\t<li>Lanny McDonald: 1980-81</li>\r\n\t<li>Mike Christie, Rene Robert and Lanny McDonald: 1979-80</li>\r\n\t<li>Gary Croteau: 1978-79</li>\r\n\t<li>Wilf Paiement: 1977-78</li>\r\n\t<li>Simon Nolet: 1974-75 &ndash;&nbsp;1976-77</li>\r\n</ul>\r\n
+    ##                               info
+    ## 1        3 – Ken Daneyko (1982-03)
+    ## 2      4 – Scott Stevens (1991-05)
+    ## 3      26 – Patrik Elias (1996-16)
+    ## 4 27 – Scott Niedermayer (1991-04)
+    ## 5    30 – Martin Brodeur (1992-14)
 
 ## NHL stats API
 
@@ -339,6 +391,9 @@ team named Seattle Kraken, which will output an error since they are a
 new team in the NHL (as of 2021), so there is currently no data on them
 in the API.
 
+Note: I reduced the number of columns in the data frames in the `head`
+function so the output would be nicer.
+
 ``` r
 ## Examples
 #All stats for all teams
@@ -389,12 +444,12 @@ access any of the six API endpoints of `getRecords` or the stats from
 for all or a specified team.
 
 ``` r
-getEndpoint <- function(input, name = NULL, id = NULL){
+getEndpoint <- function(input, name = NULL, id = NULL, ...){
   if (input == "stats"){
     getStats(name, id)
   }
   else {
-    getRecords(input, name, id)
+    getRecords(input, name, id, ...)
   }
 }
 ```
@@ -420,11 +475,15 @@ skaters and goalies were combined to examine the composition of the team
 rosters. Finally, a dataset containing all active goalies in the league
 was created to see how well the goalies perform.
 
-New variables of interest: \* For skaters: + `ppg` or points per game
-which is to determine their average points in the number of games they
-have played \* For goalies: + `winPercent` which follows the formula
-given in [this](http://hockeygoalies.org/stats/glossary.html) website +
-`positionCode` to match the column that the skaters have
+New variables of interest:
+
+-   For skaters:
+    -   `ppg` or points per game which is to determine their average
+        points in the number of games they have played
+-   For goalies:
+    -   `winPercent` which follows the formula given in
+        [this](http://hockeygoalies.org/stats/glossary.html) website
+    -   `positionCode` to match the column that the skaters have
 
 ``` r
 ##Each team's skaters:
@@ -505,7 +564,7 @@ ggplot(rosterTBLvsCH, aes(positionCode, fill = franchiseName)) +
   labs(title = "Players of each team by position", x = "Position")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-49-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-32-1.png)<!-- -->
 
 ## Numerical Summaries
 
@@ -632,7 +691,7 @@ ggplot(skateTBLvsCH, aes(positionCode, ppg)) +
   labs(title = "Boxplot for points per game", x = "player positon", y = "points per game")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-52-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
 
 ## Histogram
 
@@ -653,7 +712,7 @@ ggplot(skateTBLvsCH, aes(ppg)) +
   labs(title = "Histogram for points per game by team", x = "Points per game")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-53-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
 
 ### Win Percent
 
@@ -673,7 +732,7 @@ ggplot(allGoalie, aes(winPercent)) +
   labs(title = "Histogram for Win Percent of All Goalies in NHL", x = "Win Percent")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-54-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
 
 ## Scatter plot
 
@@ -688,4 +747,4 @@ ggplot(skateTBLvsCH, aes(gamesPlayed, points, col = franchiseName)) +
   labs(title = "Games Played vs Points", x = "Games Played", y = "Points")
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-55-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-38-1.png)<!-- -->
