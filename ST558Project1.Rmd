@@ -170,31 +170,29 @@ getRecords <- function(input = c("franchise", "teamtotal", "season", "goalie", "
 
 Below are some examples of how to use the function. The first outputs all of the franchise information. The second shows how adding an `id` (or `name`) argument will not affect the `"teamtotal"` (and `"franchise"`) endpoint(s). The third shows season records for the team with 1 as the`id`, which, in this case is the `franchiseId`. The fourth shows season records for all teams since the `name` and `id` were not specified. The fifth shows goalie information for the team with the `name` Carolina Hurricanes. The sixth shows how the `name` input overrides the `id` input, giving us the skater inforamtion for the team with `name` Carolina Hurricanes. The seventh shows the retired numbers for the team with 1 as the `id`, which is the `mostRecentTeamId`. It pulls the information on the retired numbers due to the `detail` argument. 
 
-Note: I reduced the number of columns in the data frames in the `head` function so the output would be nicer.
-
 ```{r, message = FALSE}
 ## Examples:
 #Franchise information
 franchise <- getRecords("franchise")
-head(franchise[,1:6])
+head(franchise)
 
 #Total stats for every franchise
 total <- getRecords("teamtotal", id=1)
-head(total[,1:6])
+head(total)
 
 #Season records for specific franchise or for all 
 season <- getRecords("season", id=1)
-head(season[,c(1:4, 14)])
+head(season)
 allseason <- getRecords("season")
-head(allseason[,c(1:4,14)])
+head(allseason)
 
 #Goalie records for specific franchise
 goalie <- getRecords("goalie", name = "Carolina Hurricanes")
-head(goalie[,1:6])
+head(goalie)
 
 #Skater records for for specific franchise
 skater <- getRecords("skater", name = "Carolina Hurricanes", id=1)
-head(skater[,1:6])
+head(skater)
 
 #Admin history and retired numbers, Note: id is mostRecentTeamId
 admin <- getRecords("history", id=1, detail = "player")
@@ -280,13 +278,13 @@ Note: I reduced the number of columns in the data frames in the `head` function 
 ## Examples
 #All stats for all teams
 all <- getStats()
-head(all[,1:9])
+head(all)
 
 #For a specific team
 team1 <- getStats(id = 1)
-head(team1[,1:9])
+head(team1)
 team2 <- getStats(name = "Carolina Hurricanes")
-head(team2[,1:9])
+head(team2)
 
 #For Seattle Kraken (recentId = 55)
 getStats(name = "Seattle Kraken")
